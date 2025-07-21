@@ -344,8 +344,8 @@ function PedidoItem({ pedido, idx, selecionado, setSelecionado, dark, produtos, 
         padding: 10,
         marginBottom: 10,
         borderRadius: 8,
-        background: idx === selecionado ? (dark ? '#333' : '#ffe082') : pedido.feito ? (dark ? '#444' : '#e0e0e0') : (dark ? '#232323' : '#fff'),
-        border: idx === selecionado ? '2px solid #ffb300' : '1px solid #eee',
+        background: idx === selecionado ? (dark ? '#473200' : '#ffe082') : pedido.feito ? (dark ? '#444' : '#eee') : (dark ? '#232323' : '#fff'),
+        border: idx === selecionado ? '2px solid #ffb300' : '2px solid #eee',
         cursor: 'pointer',
         fontSize: 20,
         display: 'flex',
@@ -357,10 +357,7 @@ function PedidoItem({ pedido, idx, selecionado, setSelecionado, dark, produtos, 
       }}
     >
       <div>
-        <div>#{pedido.id} - {totalItens} itens</div>
-        <div style={{ fontSize: 16, color: '#666', marginTop: 2 }}>
-          R$ {pedido.valor_total ? pedido.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
-        </div>
+        <div>#{pedido.id} - {totalItens} {totalItens === 1 ? 'item' : 'itens'}</div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
@@ -373,7 +370,7 @@ function PedidoItem({ pedido, idx, selecionado, setSelecionado, dark, produtos, 
             }
           }}
           style={{
-            background: 'purple',
+            background: dark ? 'mediumpurple' : 'purple',
             color: '#fff',
             border: 'none',
             borderRadius: 4,
@@ -385,7 +382,7 @@ function PedidoItem({ pedido, idx, selecionado, setSelecionado, dark, produtos, 
         >
           Detalhes
         </button>
-        <span style={{ color: pedido.feito ? 'green' : '#ffb300', fontWeight: 'bold' }}>
+        <span style={{ color: pedido.feito ? 'green' : '#ffb300', fontWeight: 'bold', width: 91 }}>
           {pedido.feito ? 'Feito' : 'Pendente'}
         </span>
       </div>
@@ -463,12 +460,24 @@ function DetalhePedido({ pedido, dark, onMarcarFeito, onMarcarPendente, sabores 
         <div style={{ flex: 1 }}>{renderCol(col1)}</div>
         <div style={{ flex: 1 }}>{renderCol(col2)}</div>
       </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
           <div style={{ fontSize: 14, color: dark ? '#888' : '#aaa' }}>
             Criado em: {pedido.criado_UTC && new Date(pedido.criado_UTC + 'Z').toLocaleString('pt-BR')}
           </div>
           <div style={{ fontSize: 14, color: dark ? '#888' : '#aaa' }}>
             Pronto em: {pedido.pronto_UTC ? new Date(pedido.pronto_UTC + 'Z').toLocaleString('pt-BR') : '-'}
           </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 16, color: dark ? '#888' : '#aaa', marginTop: 2 }}>
+            Valor:
+          </div>
+          <div style={{ fontSize: 16, color: dark ? '#888' : '#aaa', marginTop: 2 }}>
+            R$ {pedido.valor_total ? pedido.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
+          </div>
+        </div>
+      </div>
       {pedido.feito
         ? (
           <button
@@ -659,7 +668,7 @@ function TelaPedidos({ dark, setDark }) {
             color: dark ? '#fff' : '#222',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: 24 }}>Pedido #{detalhesPedido.id}</h2>
+              <h2 style={{ margin: 0, fontSize: 24, color: dark ? 'mediumpurple' : 'purple' }}>Pedido #{detalhesPedido.id}</h2>
               <button
                 onClick={() => setShowDetalhes(false)}
                 style={{
@@ -667,7 +676,7 @@ function TelaPedidos({ dark, setDark }) {
                   border: 'none',
                   fontSize: 24,
                   cursor: 'pointer',
-                  color: dark ? '#fff' : '#222',
+                  color: dark ? 'mediumpurple' : 'purple',
                   padding: 0,
                   width: 30,
                   height: 30,
@@ -681,22 +690,23 @@ function TelaPedidos({ dark, setDark }) {
             </div>
             
             <div style={{ marginBottom: 20 }}>
-              <h3 style={{ margin: '0 0 10px 0', fontSize: 18 }}>Itens do Pedido:</h3>
+              <h3 style={{ margin: '0 0 10px 0', fontSize: 18, color: dark ? 'mediumpurple' : 'purple' }}>Itens do Pedido:</h3>
               {detalhesPedido.itens.map((item, index) => (
                 <div key={index} style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   padding: '8px 0',
-                  borderBottom: '1px solid #eee',
+                  borderBottom: '1px solid',
+                  borderColor: dark ? 'mediumpurple' : 'purple',
                 }}>
                   <div>
-                    <div style={{ fontWeight: 'bold' }}>{item.sabor_nome}</div>
-                    <div style={{ fontSize: 14, color: '#666' }}>
+                    <div style={{ fontWeight: 'bold', color: dark ? 'mediumpurple' : 'purple', textAlign: 'left' }}>{item.sabor_nome}</div>
+                    <div style={{ fontSize: 14, color: dark ? '#c3a8fb' : 'mediumpurple', textAlign: 'left', marginLeft: 10 }}>
                       {item.quantidade}x R$ {item.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </div>
                   </div>
-                  <div style={{ fontWeight: 'bold', fontSize: 16 }}>
+                  <div style={{ fontWeight: 'bold', fontSize: 16, color: dark ? 'mediumpurple' : 'purple' }}>
                     R$ {item.valor_total_item.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
@@ -704,11 +714,11 @@ function TelaPedidos({ dark, setDark }) {
             </div>
             
             <div style={{
-              borderTop: '2px solid #eee',
               paddingTop: 15,
               textAlign: 'right',
               fontSize: 18,
               fontWeight: 'bold',
+              color: dark ? 'mediumpurple' : 'purple'
             }}>
               Total: R$ {detalhesPedido.itens.reduce((total, item) => total + item.valor_total_item, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </div>
