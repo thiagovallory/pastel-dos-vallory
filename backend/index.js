@@ -22,7 +22,8 @@ db.serialize(() => {
   )`);
   db.run(`CREATE TABLE IF NOT EXISTS sabores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL UNIQUE
+    nome TEXT NOT NULL UNIQUE,
+    valor INTEGER DEFAULT 0
   )`);
   db.run(`CREATE TABLE IF NOT EXISTS itens_pedido (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,22 +45,38 @@ app.post('/api/pedidos', (req, res) => {
       quantidade: Number(v)
     }));
   if (sabores.length === 0) return res.status(400).json({ error: 'Nenhum sabor selecionado' });
-  db.run(
-    `INSERT INTO pedidos (feito) VALUES (0)`,
-    [],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      const pedidoId = this.lastID;
-      const stmt = db.prepare('INSERT INTO itens_pedido (pedido_id, sabor_id, quantidade) VALUES (?, ?, ?)');
-      for (const s of sabores) {
-        stmt.run(pedidoId, s.sabor_id, s.quantidade);
-      }
-      stmt.finalize((err) => {
+  
+  // Primeiro, buscar os valores dos sabores para calcular o total
+  const saborIds = sabores.map(s => s.sabor_id);
+  db.all(`SELECT id, valor FROM sabores WHERE id IN (${saborIds.map(() => '?').join(',')})`, saborIds, (err, saboresInfo) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    // Calcular valor total
+    const valorTotal = sabores.reduce((total, s) => {
+      const saborInfo = saboresInfo.find(info => info.id === s.sabor_id);
+      return total + (s.quantidade * (saborInfo?.valor || 0));
+    }, 0);
+    
+    // Criar o pedido com o valor total
+    db.run(
+      `INSERT INTO pedidos (feito, valor_total) VALUES (0, ?)`,
+      [valorTotal],
+      function (err) {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ id: pedidoId });
-      });
-    }
-  );
+        const pedidoId = this.lastID;
+        const stmt = db.prepare('INSERT INTO itens_pedido (pedido_id, sabor_id, quantidade, valor_unitario) VALUES (?, ?, ?, ?)');
+        for (const s of sabores) {
+          const saborInfo = saboresInfo.find(info => info.id === s.sabor_id);
+          const valorUnitario = saborInfo?.valor || 0;
+          stmt.run(pedidoId, s.sabor_id, s.quantidade, valorUnitario);
+        }
+        stmt.finalize((err) => {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ id: pedidoId, valor_total: valorTotal });
+        });
+      }
+    );
+  });
 });
 
 // Listar todos os pedidos
@@ -90,6 +107,20 @@ app.get('/api/pedidos', (req, res) => {
   });
 });
 
+// Listar itens de um pedido específico
+app.get('/api/pedidos/:id/itens', (req, res) => {
+  const { id } = req.params;
+  db.all(`SELECT ip.sabor_id, ip.quantidade, ip.valor_unitario, 
+          (ip.quantidade * ip.valor_unitario) as valor_total_item,
+          s.nome as sabor_nome
+          FROM itens_pedido ip 
+          JOIN sabores s ON ip.sabor_id = s.id 
+          WHERE ip.pedido_id = ?`, [id], (err, itens) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(itens);
+  });
+});
+
 // Marcar pedido como feito e preencher pronto_UTC
 app.patch('/api/pedidos/:id/feito', (req, res) => {
   const { id } = req.params;
@@ -117,18 +148,18 @@ app.get('/api/sabores', (req, res) => {
 
 // Adicionar novo sabor
 app.post('/api/sabores', (req, res) => {
-  const { nome } = req.body;
-  db.run('INSERT INTO sabores (nome) VALUES (?)', [nome], function (err) {
+  const { nome, valor } = req.body;
+  db.run('INSERT INTO sabores (nome, valor) VALUES (?, ?)', [nome, valor ?? 0], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ id: this.lastID });
   });
 });
 
-// Atualizar fazendo e qnt de um sabor
+// Atualizar fazendo, qnt ou valor de um sabor
 app.patch('/api/sabores/:id', (req, res) => {
   const { id } = req.params;
-  const { fazendo, qnt } = req.body;
-  db.run('UPDATE sabores SET fazendo = COALESCE(?, fazendo), qnt = COALESCE(?, qnt) WHERE id = ?', [fazendo, qnt, id], function (err) {
+  const { fazendo, qnt, valor } = req.body;
+  db.run('UPDATE sabores SET fazendo = COALESCE(?, fazendo), qnt = COALESCE(?, qnt), valor = COALESCE(?, valor) WHERE id = ?', [fazendo, qnt, valor, id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true });
   });
@@ -141,27 +172,63 @@ app.patch('/api/pedidos/:pedidoId/sabor/:saborId', (req, res) => {
   if (quantidade === undefined || quantidade < 0) {
     return res.status(400).json({ error: 'Quantidade inválida' });
   }
+  
+  // Função para recalcular valor total do pedido
+  function recalcularValorTotal() {
+    db.all(`SELECT ip.sabor_id, ip.quantidade, ip.valor_unitario 
+            FROM itens_pedido ip 
+            WHERE ip.pedido_id = ?`, [pedidoId], (err, itens) => {
+      if (err) return res.status(500).json({ error: err.message });
+      
+      const valorTotal = itens.reduce((total, item) => total + (item.quantidade * item.valor_unitario), 0);
+      
+      db.run('UPDATE pedidos SET valor_total = ? WHERE id = ?', [valorTotal, pedidoId], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, valor_total: valorTotal });
+      });
+    });
+  }
+  
   if (quantidade === 0) {
     // Remove o item se quantidade for 0
     db.run('DELETE FROM itens_pedido WHERE pedido_id = ? AND sabor_id = ?', [pedidoId, saborId], function (err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true });
+      recalcularValorTotal();
     });
   } else {
     // Atualiza ou insere
     db.run('UPDATE itens_pedido SET quantidade = ? WHERE pedido_id = ? AND sabor_id = ?', [quantidade, pedidoId, saborId], function (err) {
       if (err) return res.status(500).json({ error: err.message });
       if (this.changes === 0) {
-        // Se não existia, insere
-        db.run('INSERT INTO itens_pedido (pedido_id, sabor_id, quantidade) VALUES (?, ?, ?)', [pedidoId, saborId, quantidade], function (err) {
+        // Se não existia, insere com o valor atual do sabor
+        db.get('SELECT valor FROM sabores WHERE id = ?', [saborId], (err, sabor) => {
           if (err) return res.status(500).json({ error: err.message });
-          res.json({ success: true });
+          const valorUnitario = sabor?.valor || 0;
+          db.run('INSERT INTO itens_pedido (pedido_id, sabor_id, quantidade, valor_unitario) VALUES (?, ?, ?, ?)', 
+                 [pedidoId, saborId, quantidade, valorUnitario], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            recalcularValorTotal();
+          });
         });
       } else {
-        res.json({ success: true });
+        recalcularValorTotal();
       }
     });
   }
+});
+
+// Listar itens de um pedido específico
+app.get('/api/pedidos/:id/itens', (req, res) => {
+  const { id } = req.params;
+  db.all(`SELECT ip.sabor_id, ip.quantidade, ip.valor_unitario, 
+          (ip.quantidade * ip.valor_unitario) as valor_total_item,
+          s.nome as sabor_nome
+          FROM itens_pedido ip 
+          JOIN sabores s ON ip.sabor_id = s.id 
+          WHERE ip.pedido_id = ?`, [id], (err, itens) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(itens);
+  });
 });
 
 app.listen(PORT, () => {

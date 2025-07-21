@@ -6,7 +6,20 @@ import { useSwipeable } from 'react-swipeable';
 // import viteLogo from '/vite.svg'
 import './App.css'
 
-const BASE_URL = 'http://192.168.3.217:3001';
+// Função para obter a URL base dinamicamente
+function getDynamicBaseUrl() {
+  const currentHost = window.location.hostname;
+  
+  // Se estiver acessando via IP (não localhost), usa o mesmo IP para o backend
+  if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+    return `http://${currentHost}:3001`;
+  }
+  
+  // Para desenvolvimento local
+  return 'http://localhost:3001';
+}
+
+const BASE_URL = getDynamicBaseUrl();
 
 function useDarkMode() {
   const [dark, setDark] = useState(false);
@@ -74,7 +87,7 @@ function TelaPedido({ dark, setDark }) {
 
   // Cálculo do valor total
   const total =
-    sabores.reduce((acc, s) => acc + (quantidades['sabor_' + s.id] || 0) * (s.nome === 'Caldo' ? 5 : 12), 0);
+    sabores.reduce((acc, s) => acc + (quantidades['sabor_' + s.id] || 0) * (s.valor || 0), 0);
 
   useEffect(() => {
     if (mensagem && mensagem.includes('sucesso')) {
@@ -343,12 +356,39 @@ function PedidoItem({ pedido, idx, selecionado, setSelecionado, dark, produtos, 
         touchAction: 'pan-y',
       }}
     >
-      <span>
-        #{pedido.id} - {totalItens} itens
-      </span>
-      <span style={{ color: pedido.feito ? 'green' : '#ffb300', fontWeight: 'bold' }}>
-        {pedido.feito ? 'Feito' : 'Pendente'}
-      </span>
+      <div>
+        <div>#{pedido.id} - {totalItens} itens</div>
+        <div style={{ fontSize: 16, color: '#666', marginTop: 2 }}>
+          R$ {pedido.valor_total ? pedido.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          id="detalhePedido"
+          onClick={(e) => {
+            e.stopPropagation();
+            // Função será implementada no componente pai
+            if (window.showPedidoDetalhes) {
+              window.showPedidoDetalhes(pedido.id);
+            }
+          }}
+          style={{
+            background: 'purple',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 4,
+            padding: '4px 8px',
+            fontSize: 12,
+            cursor: 'pointer',
+            fontWeight: 'bold'
+          }}
+        >
+          Detalhes
+        </button>
+        <span style={{ color: pedido.feito ? 'green' : '#ffb300', fontWeight: 'bold' }}>
+          {pedido.feito ? 'Feito' : 'Pendente'}
+        </span>
+      </div>
     </div>
   );
 }
@@ -394,8 +434,7 @@ function DetalhePedido({ pedido, dark, onMarcarFeito, onMarcarPendente, sabores 
       <div key={sabor.id} style={{ fontSize: 20, marginBottom: 5, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ minWidth: 70 }}>{sabor.nome}:</span>
         <input
-          type="number"
-          min={0}
+          type="text"
           value={editando[sabor.id] !== undefined ? editando[sabor.id] : pedido['sabor_' + sabor.id] || 0}
           disabled={loading || pedido.feito}
           style={{ width: 50, fontSize: 18, borderRadius: 8, border: '1px solid #ccc', textAlign: 'center', background: dark ? '#181818' : '#fff', color: dark ? '#fff' : '#222' }}
@@ -424,12 +463,12 @@ function DetalhePedido({ pedido, dark, onMarcarFeito, onMarcarPendente, sabores 
         <div style={{ flex: 1 }}>{renderCol(col1)}</div>
         <div style={{ flex: 1 }}>{renderCol(col2)}</div>
       </div>
-      <div style={{ fontSize: 14, color: dark ? '#888' : '#aaa' }}>
-        Criado em: {pedido.criado_UTC && new Date(pedido.criado_UTC + 'Z').toLocaleString('pt-BR')}
-      </div>
-      <div style={{ fontSize: 14, color: dark ? '#888' : '#aaa' }}>
-        Pronto em: {pedido.pronto_UTC ? new Date(pedido.pronto_UTC + 'Z').toLocaleString('pt-BR') : '-'}
-      </div>
+          <div style={{ fontSize: 14, color: dark ? '#888' : '#aaa' }}>
+            Criado em: {pedido.criado_UTC && new Date(pedido.criado_UTC + 'Z').toLocaleString('pt-BR')}
+          </div>
+          <div style={{ fontSize: 14, color: dark ? '#888' : '#aaa' }}>
+            Pronto em: {pedido.pronto_UTC ? new Date(pedido.pronto_UTC + 'Z').toLocaleString('pt-BR') : '-'}
+          </div>
       {pedido.feito
         ? (
           <button
@@ -481,6 +520,8 @@ function DetalhePedido({ pedido, dark, onMarcarFeito, onMarcarPendente, sabores 
 function TelaPedidos({ dark, setDark }) {
   const [pedidos, setPedidos] = useState([]);
   const [selecionado, setSelecionado] = useState(0);
+  const [detalhesPedido, setDetalhesPedido] = useState(null);
+  const [showDetalhes, setShowDetalhes] = useState(false);
   const listaRef = useRef();
   const navigate = useNavigate();
   const sabores = useSabores();
@@ -489,6 +530,28 @@ function TelaPedidos({ dark, setDark }) {
     buscarPedidos();
     const interval = setInterval(buscarPedidos, 3000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Função para mostrar detalhes do pedido
+  const showPedidoDetalhes = async (pedidoId) => {
+    try {
+      const response = await fetch(`${BASE_URL}/api/pedidos/${pedidoId}/itens`);
+      if (response.ok) {
+        const itens = await response.json();
+        setDetalhesPedido({ id: pedidoId, itens });
+        setShowDetalhes(true);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar detalhes do pedido:', error);
+    }
+  };
+
+  // Expor função globalmente
+  useEffect(() => {
+    window.showPedidoDetalhes = showPedidoDetalhes;
+    return () => {
+      delete window.showPedidoDetalhes;
+    };
   }, []);
 
   function buscarPedidos() {
@@ -569,6 +632,89 @@ function TelaPedidos({ dark, setDark }) {
           Fazer novo pedido
         </button>
       </div>
+
+      {/* Popup de Detalhes */}
+      {showDetalhes && detalhesPedido && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            background: dark ? '#232323' : '#fff',
+            borderRadius: 12,
+            padding: 20,
+            maxWidth: 400,
+            width: '90%',
+            maxHeight: '80%',
+            overflowY: 'auto',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+            color: dark ? '#fff' : '#222',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ margin: 0, fontSize: 24 }}>Pedido #{detalhesPedido.id}</h2>
+              <button
+                onClick={() => setShowDetalhes(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: 24,
+                  cursor: 'pointer',
+                  color: dark ? '#fff' : '#222',
+                  padding: 0,
+                  width: 30,
+                  height: 30,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ marginBottom: 20 }}>
+              <h3 style={{ margin: '0 0 10px 0', fontSize: 18 }}>Itens do Pedido:</h3>
+              {detalhesPedido.itens.map((item, index) => (
+                <div key={index} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 0',
+                  borderBottom: '1px solid #eee',
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 'bold' }}>{item.sabor_nome}</div>
+                    <div style={{ fontSize: 14, color: '#666' }}>
+                      {item.quantidade}x R$ {item.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div style={{ fontWeight: 'bold', fontSize: 16 }}>
+                    R$ {item.valor_total_item.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div style={{
+              borderTop: '2px solid #eee',
+              paddingTop: 15,
+              textAlign: 'right',
+              fontSize: 18,
+              fontWeight: 'bold',
+            }}>
+              Total: R$ {detalhesPedido.itens.reduce((total, item) => total + item.valor_total_item, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -576,6 +722,7 @@ function TelaPedidos({ dark, setDark }) {
 function TelaAdmin({ dark, setDark }) {
   const [sabores, setSabores] = useState([]);
   const [novoSabor, setNovoSabor] = useState('');
+  const [novoValor, setNovoValor] = useState('');
   const [loading, setLoading] = useState(false);
 
   function buscarSabores() {
@@ -595,10 +742,11 @@ function TelaAdmin({ dark, setDark }) {
     fetch(`${BASE_URL}/api/sabores`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: novoSabor.trim() })
+      body: JSON.stringify({ nome: novoSabor.trim(), valor: novoValor ? Number(novoValor) : 0 })
     })
       .then(() => {
         setNovoSabor('');
+        setNovoValor('');
         buscarSabores();
       })
       .finally(() => setLoading(false));
@@ -625,7 +773,23 @@ function TelaAdmin({ dark, setDark }) {
           value={novoSabor}
           onChange={e => setNovoSabor(e.target.value)}
           placeholder="Novo sabor"
-          style={{ fontSize: 18, padding: 8, borderRadius: 8, border: '1px solid #ccc', flex: 1, background: dark ? '#181818' : '#fff', color: dark ? '#fff' : '#222' }}
+          style={{ width: 150, fontSize: 18, padding: 8, borderRadius: 8, border: '1px solid #ccc', flex: 1, background: dark ? '#181818' : '#fff', color: dark ? '#fff' : '#222' }}
+          disabled={loading}
+        />
+        <input
+          type="text"
+          value={novoValor.replace('.', ',')}
+          onChange={e => {
+            // Permite apenas números, vírgula e ponto
+            let v = e.target.value.replace(/[^0-9.,]/g, '');
+            // Se houver mais de uma vírgula ou ponto, mantém só o primeiro
+            v = v.replace(/([.,])(.*)[.,]/, '$1$2');
+            setNovoValor(v.replace(',', '.'));
+          }}
+          placeholder="Valor (R$)"
+          inputMode="decimal"
+          pattern="[0-9]+([,\.]?[0-9]{0,2})?"
+          style={{ fontSize: 18, padding: 8, borderRadius: 8, border: '1px solid #ccc', width: 50, background: dark ? '#181818' : '#fff', color: dark ? '#fff' : '#222', MozAppearance: 'textfield', WebkitAppearance: 'none', appearance: 'none' }}
           disabled={loading}
         />
         <button type="submit" style={{ fontSize: 18, padding: '8px 18px', borderRadius: 8, background: '#43a047', color: '#fff', border: 'none', fontWeight: 'bold' }} disabled={loading}>
@@ -638,6 +802,7 @@ function TelaAdmin({ dark, setDark }) {
             <th style={{ textAlign: 'left', padding: 8 }}>Sabor</th>
             <th style={{ textAlign: 'center', padding: 8 }}>Fazendo</th>
             <th style={{ textAlign: 'center', padding: 8 }}>Qtd</th>
+            <th style={{ textAlign: 'center', padding: 8 }}>Valor (R$)</th>
           </tr>
         </thead>
         <tbody>
@@ -655,12 +820,33 @@ function TelaAdmin({ dark, setDark }) {
               </td>
               <td style={{ textAlign: 'center', padding: 8 }}>
                 <input
-                  type="number"
+                  type="text"
                   value={sabor.qnt}
-                  min={0}
-                  onChange={e => atualizarSabor(sabor.id, 'qnt', Number(e.target.value))}
+                  onChange={e => {
+                    // Permite apenas números
+                    const v = e.target.value.replace(/\D/g, '');
+                    atualizarSabor(sabor.id, 'qnt', Number(v));
+                  }}
                   disabled={loading}
-                  style={{ width: 60, fontSize: 18, borderRadius: 8, border: '1px solid #ccc', textAlign: 'center', background: dark ? '#181818' : '#fff', color: dark ? '#fff' : '#222' }}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  style={{ width: 60, fontSize: 18, borderRadius: 8, border: '1px solid #ccc', textAlign: 'center', background: dark ? '#181818' : '#fff', color: dark ? '#fff' : '#222', MozAppearance: 'textfield', WebkitAppearance: 'none', appearance: 'none' }}
+                />
+              </td>
+              <td style={{ textAlign: 'center', padding: 8 }}>
+                <input
+                  type="text"
+                  value={sabor.valor !== undefined && sabor.valor !== null ? String(sabor.valor).replace('.', ',') : '0'}
+                  onChange={e => {
+                    // Permite apenas números, vírgula e ponto
+                    let v = e.target.value.replace(/[^0-9.,]/g, '');
+                    v = v.replace(/([.,])(.*)[.,]/, '$1$2');
+                    atualizarSabor(sabor.id, 'valor', v ? parseFloat(v.replace(',', '.')) : 0);
+                  }}
+                  disabled={loading}
+                  inputMode="decimal"
+                  pattern="[0-9]+([,\.]?[0-9]{0,2})?"
+                  style={{ width: 80, fontSize: 18, borderRadius: 8, border: '1px solid #ccc', textAlign: 'center', background: dark ? '#181818' : '#fff', color: dark ? '#fff' : '#222', MozAppearance: 'textfield', WebkitAppearance: 'none', appearance: 'none' }}
                 />
               </td>
             </tr>
