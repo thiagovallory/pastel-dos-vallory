@@ -43,11 +43,15 @@ db.serialize(() => {
   db.run(`ALTER TABLE sabores ADD COLUMN valor REAL DEFAULT 0`, () => {});
   db.run(`ALTER TABLE pedidos ADD COLUMN valor_total REAL DEFAULT 0`, () => {});
   db.run(`ALTER TABLE itens_pedido ADD COLUMN valor_unitario REAL DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE pedidos ADD COLUMN nome TEXT DEFAULT ''`, () => {});
 });
 
 // Criar novo pedido
 app.post('/api/pedidos', (req, res) => {
-  // Espera receber: { sabor_1: 2, sabor_2: 0, sabor_3: 1, ... }
+  // Espera receber: { nome: "João", sabor_1: 2, sabor_2: 0, sabor_3: 1, ... }
+  const { nome } = req.body;
+  const nomeCliente = nome || '';
+  
   const sabores = Object.entries(req.body)
     .filter(([k, v]) => k.startsWith('sabor_') && Number(v) > 0)
     .map(([k, v]) => ({
@@ -56,10 +60,32 @@ app.post('/api/pedidos', (req, res) => {
     }));
   if (sabores.length === 0) return res.status(400).json({ error: 'Nenhum sabor selecionado' });
   
-  // Primeiro, buscar os valores dos sabores para calcular o total
+  // Primeiro, buscar os valores e quantidades disponíveis dos sabores
   const saborIds = sabores.map(s => s.sabor_id);
-  db.all(`SELECT id, valor FROM sabores WHERE id IN (${saborIds.map(() => '?').join(',')})`, saborIds, (err, saboresInfo) => {
+  db.all(`SELECT id, nome, valor, qnt FROM sabores WHERE id IN (${saborIds.map(() => '?').join(',')})`, saborIds, (err, saboresInfo) => {
     if (err) return res.status(500).json({ error: err.message });
+    
+    // Verificar se há estoque suficiente para todos os sabores
+    const semEstoque = [];
+    for (const s of sabores) {
+      const saborInfo = saboresInfo.find(info => info.id === s.sabor_id);
+      const estoqueDisponivel = saborInfo?.qnt || 0;
+      if (s.quantidade > estoqueDisponivel) {
+        semEstoque.push({
+          nome: saborInfo?.nome || `Sabor ${s.sabor_id}`,
+          pedido: s.quantidade,
+          disponivel: estoqueDisponivel
+        });
+      }
+    }
+    
+    // Se algum sabor não tem estoque suficiente, retorna erro
+    if (semEstoque.length > 0) {
+      return res.status(400).json({ 
+        error: 'Estoque insuficiente',
+        details: semEstoque
+      });
+    }
     
     // Calcular valor total
     const valorTotal = sabores.reduce((total, s) => {
@@ -67,25 +93,64 @@ app.post('/api/pedidos', (req, res) => {
       return total + (s.quantidade * (saborInfo?.valor || 0));
     }, 0);
     
-    // Criar o pedido com o valor total
-    db.run(
-      `INSERT INTO pedidos (feito, valor_total) VALUES (0, ?)`,
-      [valorTotal],
-      function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        const pedidoId = this.lastID;
-        const stmt = db.prepare('INSERT INTO itens_pedido (pedido_id, sabor_id, quantidade, valor_unitario) VALUES (?, ?, ?, ?)');
-        for (const s of sabores) {
-          const saborInfo = saboresInfo.find(info => info.id === s.sabor_id);
-          const valorUnitario = saborInfo?.valor || 0;
-          stmt.run(pedidoId, s.sabor_id, s.quantidade, valorUnitario);
+    // Iniciar transação para criar pedido e diminuir estoque atomicamente
+    db.serialize(() => {
+      db.run('BEGIN TRANSACTION');
+      
+      // Criar o pedido com o valor total e nome
+      db.run(
+        `INSERT INTO pedidos (feito, valor_total, nome) VALUES (0, ?, ?)`,
+        [valorTotal, nomeCliente],
+        function (err) {
+          if (err) {
+            db.run('ROLLBACK');
+            return res.status(500).json({ error: err.message });
+          }
+          
+          const pedidoId = this.lastID;
+          let operacoesRestantes = sabores.length * 2; // itens + diminuir estoque
+          let erro = null;
+          
+          // Inserir itens do pedido e diminuir estoque
+          for (const s of sabores) {
+            const saborInfo = saboresInfo.find(info => info.id === s.sabor_id);
+            const valorUnitario = saborInfo?.valor || 0;
+            
+            // Inserir item do pedido
+            db.run(
+              'INSERT INTO itens_pedido (pedido_id, sabor_id, quantidade, valor_unitario) VALUES (?, ?, ?, ?)',
+              [pedidoId, s.sabor_id, s.quantidade, valorUnitario],
+              function(err) {
+                if (err) erro = err;
+                operacoesRestantes--;
+                if (operacoesRestantes === 0) finalizarTransacao();
+              }
+            );
+            
+            // Diminuir quantidade do sabor
+            db.run(
+              'UPDATE sabores SET qnt = qnt - ? WHERE id = ?',
+              [s.quantidade, s.sabor_id],
+              function(err) {
+                if (err) erro = err;
+                operacoesRestantes--;
+                if (operacoesRestantes === 0) finalizarTransacao();
+              }
+            );
+          }
+          
+          function finalizarTransacao() {
+            if (erro) {
+              db.run('ROLLBACK');
+              return res.status(500).json({ error: erro.message });
+            } else {
+              db.run('COMMIT');
+              res.json({ id: pedidoId, valor_total: valorTotal });
+            }
+          }
         }
-        stmt.finalize((err) => {
-          if (err) return res.status(500).json({ error: err.message });
-          res.json({ id: pedidoId, valor_total: valorTotal });
-        });
-      }
-    );
+      );
+    });
   });
 });
 

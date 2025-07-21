@@ -79,8 +79,8 @@ npm run build
 
 ## 📱 Rotas da Aplicação
 
-- **/** - Tela de pedidos (página inicial)
-- **/pedido** - Tela de pedidos
+- **/** - Tela para pedir (página inicial)
+- **/pedir** - Tela para pedir
 - **/pedidos** - Lista de pedidos (controle)
 - **/admin** - Administração de sabores
 
