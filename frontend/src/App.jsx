@@ -734,6 +734,7 @@ function TelaAdmin({ dark, setDark }) {
   const [novoSabor, setNovoSabor] = useState('');
   const [novoValor, setNovoValor] = useState('');
   const [loading, setLoading] = useState(false);
+  const [editandoValores, setEditandoValores] = useState({});
 
   function buscarSabores() {
     fetch(`${BASE_URL}/api/sabores`)
@@ -749,10 +750,12 @@ function TelaAdmin({ dark, setDark }) {
     e.preventDefault();
     if (!novoSabor.trim()) return;
     setLoading(true);
+    // Converte vírgula para ponto para o Number() funcionar corretamente
+    const valorNumerico = novoValor ? Number(novoValor.replace(',', '.')) : 0;
     fetch(`${BASE_URL}/api/sabores`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: novoSabor.trim(), valor: novoValor ? Number(novoValor) : 0 })
+      body: JSON.stringify({ nome: novoSabor.trim(), valor: valorNumerico })
     })
       .then(() => {
         setNovoSabor('');
@@ -788,17 +791,16 @@ function TelaAdmin({ dark, setDark }) {
         />
         <input
           type="text"
-          value={novoValor.replace('.', ',')}
+          value={novoValor}
           onChange={e => {
             // Permite apenas números, vírgula e ponto
             let v = e.target.value.replace(/[^0-9.,]/g, '');
             // Se houver mais de uma vírgula ou ponto, mantém só o primeiro
             v = v.replace(/([.,])(.*)[.,]/, '$1$2');
-            setNovoValor(v.replace(',', '.'));
+            setNovoValor(v);
           }}
-          placeholder="Valor (R$)"
+          placeholder="R$"
           inputMode="decimal"
-          pattern="[0-9]+([,\.]?[0-9]{0,2})?"
           style={{ fontSize: 18, padding: 8, borderRadius: 8, border: '1px solid #ccc', width: 50, background: dark ? '#181818' : '#fff', color: dark ? '#fff' : '#222', MozAppearance: 'textfield', WebkitAppearance: 'none', appearance: 'none' }}
           disabled={loading}
         />
@@ -831,31 +833,52 @@ function TelaAdmin({ dark, setDark }) {
               <td style={{ textAlign: 'center', padding: 8 }}>
                 <input
                   type="text"
-                  value={sabor.qnt}
+                  value={editandoValores[`qnt_${sabor.id}`] !== undefined ? editandoValores[`qnt_${sabor.id}`] : (sabor.qnt || '')}
                   onChange={e => {
-                    // Permite apenas números
+                    // Permite apenas números - atualiza apenas localmente
                     const v = e.target.value.replace(/\D/g, '');
-                    atualizarSabor(sabor.id, 'qnt', Number(v));
+                    setEditandoValores(prev => ({ ...prev, [`qnt_${sabor.id}`]: v }));
+                  }}
+                  onBlur={e => {
+                    // Garante que o valor seja atualizado quando sair do campo
+                    const v = e.target.value.replace(/\D/g, '');
+                    atualizarSabor(sabor.id, 'qnt', v ? Number(v) : 0);
+                    // Remove do estado de edição
+                    setEditandoValores(prev => {
+                      const novo = { ...prev };
+                      delete novo[`qnt_${sabor.id}`];
+                      return novo;
+                    });
                   }}
                   disabled={loading}
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   style={{ width: 60, fontSize: 18, borderRadius: 8, border: '1px solid #ccc', textAlign: 'center', background: dark ? '#181818' : '#fff', color: dark ? '#fff' : '#222', MozAppearance: 'textfield', WebkitAppearance: 'none', appearance: 'none' }}
                 />
               </td>
               <td style={{ textAlign: 'center', padding: 8 }}>
                 <input
                   type="text"
-                  value={sabor.valor !== undefined && sabor.valor !== null ? String(sabor.valor).replace('.', ',') : '0'}
+                  value={editandoValores[`valor_${sabor.id}`] !== undefined ? editandoValores[`valor_${sabor.id}`] : (sabor.valor !== undefined && sabor.valor !== null ? String(sabor.valor) : '')}
                   onChange={e => {
-                    // Permite apenas números, vírgula e ponto
+                    // Permite apenas números, vírgula e ponto - atualiza apenas localmente
+                    let v = e.target.value.replace(/[^0-9.,]/g, '');
+                    v = v.replace(/([.,])(.*)[.,]/, '$1$2');
+                    setEditandoValores(prev => ({ ...prev, [`valor_${sabor.id}`]: v }));
+                  }}
+                  onBlur={e => {
+                    // Garante que o valor seja atualizado quando sair do campo
                     let v = e.target.value.replace(/[^0-9.,]/g, '');
                     v = v.replace(/([.,])(.*)[.,]/, '$1$2');
                     atualizarSabor(sabor.id, 'valor', v ? parseFloat(v.replace(',', '.')) : 0);
+                    // Remove do estado de edição
+                    setEditandoValores(prev => {
+                      const novo = { ...prev };
+                      delete novo[`valor_${sabor.id}`];
+                      return novo;
+                    });
                   }}
                   disabled={loading}
                   inputMode="decimal"
-                  pattern="[0-9]+([,\.]?[0-9]{0,2})?"
                   style={{ width: 80, fontSize: 18, borderRadius: 8, border: '1px solid #ccc', textAlign: 'center', background: dark ? '#181818' : '#fff', color: dark ? '#fff' : '#222', MozAppearance: 'textfield', WebkitAppearance: 'none', appearance: 'none' }}
                 />
               </td>

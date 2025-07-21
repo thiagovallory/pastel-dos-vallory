@@ -23,16 +23,26 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS sabores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT NOT NULL UNIQUE,
-    valor INTEGER DEFAULT 0
+    fazendo INTEGER DEFAULT 0,
+    qnt INTEGER DEFAULT 0,
+    valor REAL DEFAULT 0
   )`);
   db.run(`CREATE TABLE IF NOT EXISTS itens_pedido (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pedido_id INTEGER,
     sabor_id INTEGER,
     quantidade INTEGER,
+    valor_unitario REAL DEFAULT 0,
     FOREIGN KEY (pedido_id) REFERENCES pedidos(id),
     FOREIGN KEY (sabor_id) REFERENCES sabores(id)
   )`);
+  
+  // Migração para adicionar colunas que podem não existir
+  db.run(`ALTER TABLE sabores ADD COLUMN fazendo INTEGER DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE sabores ADD COLUMN qnt INTEGER DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE sabores ADD COLUMN valor REAL DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE pedidos ADD COLUMN valor_total REAL DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE itens_pedido ADD COLUMN valor_unitario REAL DEFAULT 0`, () => {});
 });
 
 // Criar novo pedido
