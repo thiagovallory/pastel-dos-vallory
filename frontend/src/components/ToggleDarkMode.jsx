@@ -6,7 +6,7 @@ function ToggleDarkMode({ dark, setDark }) {
       onClick={() => setDark(d => !d)}
       style={{
         position: 'absolute',
-        right: 14,
+        right: 10,
         top: 10,
         background: dark ? '#333' : '#fff',
         color: dark ? '#fff' : '#222',

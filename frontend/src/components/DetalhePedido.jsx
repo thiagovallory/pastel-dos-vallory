@@ -62,7 +62,7 @@ function DetalhePedido({ pedido, dark, onMarcarFeito, onMarcarPendente, sabores 
   }
 
   return (
-    <div style={{ padding: 24, border: '1px solid #eee', borderRadius: 10, background: dark ? '#181818' : '#fafafa', minWidth: 220, textAlign: 'left', color: dark ? '#fff' : '#222' }}>
+    <div style={{ padding: 20, border: '1px solid #eee', borderRadius: 10, background: dark ? '#181818' : '#fafafa', minWidth: 220, textAlign: 'left', color: dark ? '#fff' : '#222' }}>
       <h2 style={{ fontSize: 24, margin: '0 auto 18px auto', textAlign: 'center' }}>Detalhes dos pedidos</h2>
       <div style={{ display: 'flex', gap: 24, marginBottom: 5 }}>
         <div style={{ flex: 1 }}>{renderCol(col1)}</div>
@@ -91,7 +91,7 @@ function DetalhePedido({ pedido, dark, onMarcarFeito, onMarcarPendente, sabores 
           <button
             onClick={() => onMarcarPendente(pedido.id)}
             style={{
-              marginTop: 16,
+              marginTop: 10,
               background: '#ffb300',
               color: '#222',
               border: 'none',
@@ -112,7 +112,7 @@ function DetalhePedido({ pedido, dark, onMarcarFeito, onMarcarPendente, sabores 
           <button
             onClick={() => onMarcarFeito(pedido.id)}
             style={{
-              marginTop: 16,
+              marginTop: 10,
               background: '#43a047',
               color: '#fff',
               border: 'none',

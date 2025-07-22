@@ -1,7 +1,7 @@
 // Estilos comuns reutilizáveis
 export const getContainerStyle = (dark) => ({
-  width: 380,
-  margin: '0 auto',
+  width: 390,
+  margin: '10px auto',
   fontFamily: 'sans-serif',
   background: dark ? '#232323' : '#fff',
   borderRadius: 16,

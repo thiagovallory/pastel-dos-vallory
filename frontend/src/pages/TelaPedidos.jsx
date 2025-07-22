@@ -105,7 +105,7 @@ function TelaPedidos({ dark, setDark }) {
           />
         ))}
       </div>
-      <div style={{ textAlign: 'center', marginBottom: 5 }}>
+      <div style={{ textAlign: 'center', marginBottom: 5, display: 'flex', gap: 10, justifyContent: 'center' }}>
         <button
           onClick={() => navigate('/pedir')}
           style={{
