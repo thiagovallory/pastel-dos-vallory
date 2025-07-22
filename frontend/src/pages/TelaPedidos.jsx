@@ -26,7 +26,10 @@ function TelaPedidos({ dark, setDark }) {
   const showPedidoDetalhes = async (pedidoId) => {
     try {
       const itens = await pedidosAPI.obterItens(pedidoId);
-      const pedido = pedidos.find(p => p.id === pedidoId);
+      // Buscar dados atualizados dos pedidos para garantir que temos o nome correto
+      const dadosAtualizados = await pedidosAPI.listar();
+      const pedido = dadosAtualizados.find(p => p.id === pedidoId);
+      console.log('Pedido encontrado:', pedido); // Log para debug
       setDetalhesPedido({ id: pedidoId, nome: pedido?.nome, itens });
       setShowDetalhes(true);
     } catch (error) {
@@ -40,7 +43,7 @@ function TelaPedidos({ dark, setDark }) {
     return () => {
       delete window.showPedidoDetalhes;
     };
-  }, []);
+  }, [pedidos]);
 
   async function buscarPedidos() {
     try {
@@ -153,12 +156,7 @@ function TelaPedidos({ dark, setDark }) {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: 24, color: dark ? 'mediumpurple' : 'purple' }}>Pedido #{detalhesPedido.id}</h2>
-                {detalhesPedido.nome && (
-                  <div style={{ fontSize: 16, color: dark ? '#888' : '#666', marginTop: 4 }}>
-                    Cliente: {detalhesPedido.nome}
-                  </div>
-                )}
+                <h2 style={{ margin: 0, fontSize: 24, color: dark ? 'mediumpurple' : 'purple' }}>Pedido #{detalhesPedido.id} - {detalhesPedido.nome}</h2>
               </div>
               <button
                 onClick={() => setShowDetalhes(false)}
@@ -192,8 +190,8 @@ function TelaPedidos({ dark, setDark }) {
                   borderColor: dark ? 'mediumpurple' : 'purple',
                 }}>
                   <div>
-                    <div style={{ fontWeight: 'bold', color: dark ? 'mediumpurple' : 'purple', textAlign: 'left' }}>{item.sabor_nome}</div>
-                    <div style={{ fontSize: 14, color: dark ? '#c3a8fb' : 'mediumpurple', textAlign: 'left', marginLeft: 10 }}>
+                    <div style={{ textAlign: 'left',fontWeight: 'bold', color: dark ? 'mediumpurple' : 'purple' }}>{item.sabor_nome}</div>
+                    <div style={{ textAlign: 'left', fontSize: 14, color: dark ? '#c3a8fb' : 'mediumpurple', marginLeft: 10 }}>
                       {item.quantidade}x R$ {item.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </div>
                   </div>

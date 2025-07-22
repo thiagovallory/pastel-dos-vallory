@@ -42,7 +42,7 @@ function PedidoItem({ pedido, idx, selecionado, setSelecionado, dark, produtos, 
       <div>
         <div>#{pedido.id} - {totalItens} {totalItens === 1 ? 'item' : 'itens'}</div>
         {pedido.nome && (
-          <div style={{ fontSize: 14, color: dark ? '#888' : '#666', marginTop: 2 }}>
+          <div style={{ textAlign: 'left', fontSize: 14, color: dark ? '#888' : '#666', marginTop: 2 }}>
             {pedido.nome}
           </div>
         )}
